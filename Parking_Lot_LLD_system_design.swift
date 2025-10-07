@@ -1,56 +1,42 @@
 import Foundation
 
-// MARK: - Enums (from diagram)
-enum PaymentStatus {
-    case completed, failed, pending, unpaid, refunded
-}
+// MARK: - Enums (Java enums -> Swift)
+enum PaymentStatus { case completed, failed, pending, unpaid, refunded }
+enum AccountStatus { case active, closed, canceled, blacklisted, none }
+enum TicketStatus { case issued, inUse, paid, validated, canceled, refunded }
 
-enum AccountStatus {
-    case active, closed, canceled, blocklisted, none
-}
-
-enum TicketStatus {
-    case issued, inUse, paid, validated, canceled, refunded
-}
-
-// MARK: - Value Types
-struct Address: Hashable {
-    var zipCode: Int
-    var address: String
-    var city: String
-    var state: String
-    var country: String
-}
-
+// MARK: - Simple data (POJOs)
 struct Person: Hashable {
     var name: String
-    var streetAddress: String
+    var address: String
+    var phone: String
+    var email: String
+}
+
+struct Address: Hashable {
+    var line1: String
     var city: String
     var state: String
-    var zipcode: Int
+    var zip: String
     var country: String
 }
 
-// MARK: - Vehicle (abstract -> base class)
+// MARK: - Vehicle (Java abstract class -> base class)
 class Vehicle {
     let licenseNo: String
     fileprivate(set) var ticket: ParkingTicket?
 
-    init(licenseNo: String) {
-        self.licenseNo = licenseNo
-    }
+    init(licenseNo: String) { self.licenseNo = licenseNo }
 
-    func assignTicket(_ ticket: ParkingTicket) {
-        self.ticket = ticket
-    }
+    func assignTicket(_ ticket: ParkingTicket) { self.ticket = ticket } // mirrors Java
 }
 
 final class Car: Vehicle {}
-final class Truck: Vehicle {}
 final class Van: Vehicle {}
+final class Truck: Vehicle {}
 final class Motorcycle: Vehicle {}
 
-// MARK: - ParkingSpot (abstract -> base class)
+// MARK: - ParkingSpot (Java abstract class -> base class)
 class ParkingSpot: Hashable {
     let id: Int
     private(set) var isFree: Bool = true
@@ -59,18 +45,18 @@ class ParkingSpot: Hashable {
     init(id: Int) { self.id = id }
 
     @discardableResult
-    func assignVehicle(_ vehicle: Vehicle) -> Bool {
+    func assignVehicle(_ v: Vehicle) -> Bool {
         guard isFree else { return false }
-        self.vehicle = vehicle
-        self.isFree = false
+        vehicle = v
+        isFree = false
         return true
     }
 
     @discardableResult
     func removeVehicle() -> Bool {
         guard !isFree else { return false }
-        self.vehicle = nil
-        self.isFree = true
+        vehicle = nil
+        isFree = true
         return true
     }
 
@@ -79,126 +65,29 @@ class ParkingSpot: Hashable {
     func hash(into hasher: inout Hasher) { hasher.combine(id) }
 }
 
-final class AccessibleSpot: ParkingSpot {}
-final class CompactSpot: ParkingSpot {}
-final class LargeSpot: ParkingSpot {}
+// Four spot types (match Java names)
+final class Handicapped: ParkingSpot {}
+final class Compact: ParkingSpot {}
+final class Large: ParkingSpot {}
 final class MotorcycleSpot: ParkingSpot {}
 
-// Optional extension from “Additional requirements”
+// Optional: Electric spots/panel (if present in your Java)
 final class ElectricSpot: ParkingSpot {
-    var panel: ElectricPanel = ElectricPanel()
+    let panel = ElectricPanel()
 }
-
 final class ElectricPanel {
-    var paidForMinute: Int = 0
-    var chargingStartTime: Date?
-
-    @discardableResult
-    func cancelCharging() -> Bool {
-        chargingStartTime = nil
-        paidForMinute = 0
-        return true
-    }
+    var paidMinutes: Int = 0
+    var chargingStart: Date?
+    func start(minutes: Int) { paidMinutes = minutes; chargingStart = Date() }
+    func cancel() { paidMinutes = 0; chargingStart = nil }
 }
 
-// MARK: - Accounts (abstract -> base + role subclass)
-class Account {
-    let userName: String
-    private(set) var passwordHash: String
-    var status: AccountStatus
-    let person: Person
-
-    init(userName: String, passwordHash: String, status: AccountStatus, person: Person) {
-        self.userName = userName
-        self.passwordHash = passwordHash
-        self.status = status
-        self.person = person
-    }
-
-    @discardableResult
-    func resetPassword(newHash: String) -> Bool {
-        guard status == .active else { return false }
-        passwordHash = newHash
-        return true
-    }
-}
-
-final class Admin: Account {
-    @discardableResult
-    func addParkingSpot(floorName: String, spot: ParkingSpot) -> Bool {
-        ParkingLot.shared.addParkingSpot(floorName: floorName, spot: spot)
-    }
-
-    @discardableResult
-    func addDisplayBoard(floorName: String, displayBoard: DisplayBoard) -> Bool {
-        ParkingLot.shared.addDisplayBoard(floorName: floorName, board: displayBoard)
-    }
-
-    @discardableResult
-    func addEntrance(_ entrance: Entrance) -> Bool {
-        ParkingLot.shared.addEntrance(entrance)
-    }
-
-    @discardableResult
-    func addExit(_ exit: Exit) -> Bool {
-        ParkingLot.shared.addExit(exit)
-    }
-}
-
-// MARK: - DisplayBoard
-final class DisplayBoard {
-    let id: Int
-    // spotType -> list of spots
-    private(set) var parkingSpots: [String: [ParkingSpot]] = [:]
-
-    init(id: Int) { self.id = id }
-
-    func addParkingSpot(spotType: String, spots: [ParkingSpot]) {
-        parkingSpots[spotType, default: []].append(contentsOf: spots)
-    }
-
-    func showFreeSlot() {
-        // Stub: render to console / UI
-        let lines = parkingSpots.map { type, spots in
-            let freeCount = spots.filter { $0IsFree($0) }.count
-            return "\(type): \(freeCount) free"
-        }
-        print("[DisplayBoard#\(id)] " + lines.joined(separator: " | "))
-    }
-
-    private func $0IsFree(_ s: ParkingSpot) -> Bool { s.vehicle == nil }
-}
-
-// MARK: - Entrance / Exit
-final class Entrance {
-    let id: Int
-    init(id: Int) { self.id = id }
-
-    func getTicket(for vehicle: Vehicle) -> ParkingTicket {
-        return ParkingLot.shared.issueTicket(vehicle: vehicle, entrance: self)
-    }
-}
-
-final class Exit {
-    let id: Int
-    init(id: Int) { self.id = id }
-
-    func validateTicket(_ ticket: ParkingTicket) -> Bool {
-        guard ticket.status == .paid else { return false }
-        ticket.exitIns = self
-        ticket.status = .validated
-        return true
-    }
-}
-
-// MARK: - Payment (abstract -> protocol + base)
+// MARK: - Payments (Java abstract -> protocol + base)
 protocol Payment: AnyObject {
     var amount: Double { get set }
     var status: PaymentStatus { get set }
     var timestamp: Date? { get set }
-
-    @discardableResult
-    func initiateTransaction() -> Bool
+    @discardableResult func initiateTransaction() -> Bool
 }
 
 class BasePayment: Payment {
@@ -213,13 +102,12 @@ class BasePayment: Payment {
     }
 
     func initiateTransaction() -> Bool {
-        fatalError("Subclasses must override")
+        preconditionFailure("Override in subclass")
     }
 }
 
 final class CashPayment: BasePayment {
     override func initiateTransaction() -> Bool {
-        // Simulate success
         timestamp = Date()
         status = .completed
         return true
@@ -228,27 +116,24 @@ final class CashPayment: BasePayment {
 
 final class CreditCardPayment: BasePayment {
     override func initiateTransaction() -> Bool {
-        // Simulate external gateway
+        // simulate gateway success
         timestamp = Date()
         status = .completed
         return true
     }
 }
 
-// MARK: - ParkingRate
+// MARK: - ParkingRate (simple policy; mirror Java’s if different)
 final class ParkingRate {
-    var hours: Double = 0
-    var rate: Double = 0
-
-    func calculate(hours: Double, baseRate: Double) -> Double {
-        // Example policy: first hour at baseRate, then 0.75x base per additional hour
-        let first = min(hours, 1.0) * baseRate
-        let remain = max(hours - 1.0, 0)
-        return first + remain * (baseRate * 0.75)
+    // Example stepped policy: first hour base, then 0.75x base
+    func calculateAmount(hours: Double, baseRatePerHour: Double) -> Double {
+        let h = max(hours, 0)
+        if h <= 1 { return baseRatePerHour }
+        return baseRatePerHour + (h - 1) * (baseRatePerHour * 0.75)
     }
 }
 
-// MARK: - ParkingTicket
+// MARK: - Ticket (Java class)
 final class ParkingTicket {
     let ticketNo: Int
     let entryTime: Date
@@ -257,9 +142,9 @@ final class ParkingTicket {
     var status: TicketStatus = .issued
 
     unowned let vehicle: Vehicle
-    var payment: Payment?
     unowned let entrance: Entrance
     weak var exitIns: Exit?
+    var payment: Payment?
 
     init(ticketNo: Int, vehicle: Vehicle, entrance: Entrance, entryTime: Date = Date()) {
         self.ticketNo = ticketNo
@@ -269,7 +154,58 @@ final class ParkingTicket {
     }
 }
 
-// MARK: - ParkingFloor (from Additional requirements)
+// MARK: - DisplayBoard (Java: update + showFreeSlot)
+final class DisplayBoard {
+    let id: Int
+    private var spotsByType: [String: [ParkingSpot]] = [:]
+
+    init(id: Int) { self.id = id }
+
+    func update(_ allSpots: [ParkingSpot]) {
+        var dict: [String: [ParkingSpot]] = [:]
+        for s in allSpots {
+            let key = String(describing: type(of: s))
+            dict[key, default: []].append(s)
+        }
+        spotsByType = dict
+    }
+
+    func showFreeSlot() {
+        let summary = spotsByType
+            .map { (type, spots) -> String in
+                let free = spots.filter { $0.isFree }.count
+                return "\(type): \(free) free"
+            }
+            .sorted()
+            .joined(separator: " | ")
+        print("[DisplayBoard #\(id)] \(summary)")
+    }
+}
+
+// MARK: - Entrance / Exit (Java signatures mirrored)
+final class Entrance {
+    let id: Int
+    init(id: Int) { self.id = id }
+
+    // Return optional to reflect Java "could be null" when lot is full
+    func getTicket(_ vehicle: Vehicle) -> ParkingTicket? {
+        return ParkingLot.shared.issueTicketIfPossible(vehicle: vehicle, from: self)
+    }
+}
+
+final class Exit {
+    let id: Int
+    init(id: Int) { self.id = id }
+
+    func validateTicket(_ ticket: ParkingTicket) {
+        // Java returns void; we mutate state
+        guard ticket.status == .paid else { return }
+        ticket.exitIns = self
+        ticket.status = .validated
+    }
+}
+
+// MARK: - Floor (aggregates spots + display boards)
 final class ParkingFloor {
     let name: String
     private(set) var spots: Set<ParkingSpot> = []
@@ -277,162 +213,190 @@ final class ParkingFloor {
 
     init(name: String) { self.name = name }
 
-    func updateDisplayBoard() {
-        displayBoards.forEach { $0.showFreeSlot() }
-    }
-
-    func assignVehicleToSlot(_ vehicle: Vehicle, prefer type: (ParkingSpot) -> Bool) -> ParkingSpot? {
-        guard let spot = spots.first(where: { $0.vehicle == nil && type($0) }) else { return nil }
-        _ = spot.assignVehicle(vehicle)
-        updateDisplayBoard()
-        return spot
-    }
-
-    func addParkingSlot(_ spot: ParkingSpot) { spots.insert(spot) }
-    func freeSlot(_ spot: ParkingSpot) { _ = spot.removeVehicle(); updateDisplayBoard() }
-
+    func addSpot(_ spot: ParkingSpot) { spots.insert(spot) }
     func addDisplayBoard(_ board: DisplayBoard) { displayBoards.append(board) }
+
+    // Very simple assignment: first free spot matching predicate
+    func assignVehicle(_ v: Vehicle, where predicate: (ParkingSpot) -> Bool) -> ParkingSpot? {
+        guard let s = spots.first(where: { $0.isFree && predicate($0) }) else { return nil }
+        _ = s.assignVehicle(v)
+        // in Java, boards often updated from outside; we keep it explicit
+        return s
+    }
+
+    func free(_ spot: ParkingSpot) {
+        _ = spot.removeVehicle()
+    }
+
+    var allSpots: [ParkingSpot] { Array(spots) }
 }
 
-// MARK: - Factories
+// MARK: - Factories (match Java’s simple factories if present)
 enum VehicleFactory {
-    static func make(type: String, license: String) -> Vehicle {
+    static func make(_ type: String, license: String) -> Vehicle {
         switch type.lowercased() {
         case "car": return Car(licenseNo: license)
-        case "truck": return Truck(licenseNo: license)
         case "van": return Van(licenseNo: license)
+        case "truck": return Truck(licenseNo: license)
         case "motorcycle": return Motorcycle(licenseNo: license)
-        default: return Car(licenseNo: license) // sensible default
+        default: return Car(licenseNo: license)
         }
     }
 }
-
-enum ParkingSpotFactory {
-    static func make(type: String, id: Int) -> ParkingSpot {
+enum SpotFactory {
+    static func make(_ type: String, id: Int) -> ParkingSpot {
         switch type.lowercased() {
-        case "accessible": return AccessibleSpot(id: id)
-        case "compact": return CompactSpot(id: id)
-        case "large": return LargeSpot(id: id)
+        case "handicapped": return Handicapped(id: id)
+        case "compact": return Compact(id: id)
+        case "large": return Large(id: id)
         case "motorcycle": return MotorcycleSpot(id: id)
         case "electric": return ElectricSpot(id: id)
-        default: return CompactSpot(id: id)
+        default: return Compact(id: id)
         }
     }
 }
-
 enum PaymentFactory {
-    static func make(method: String, amount: Double) -> Payment {
-        switch method.lowercased() {
+    static func make(_ kind: String, amount: Double) -> Payment {
+        switch kind.lowercased() {
         case "cash": return CashPayment(amount: amount)
-        case "card", "creditcard": return CreditCardPayment(amount: amount)
+        case "card", "credit", "creditcard": return CreditCardPayment(amount: amount)
         default: return CashPayment(amount: amount)
         }
     }
 }
 
-// MARK: - ParkingLot (Singleton)
+// MARK: - ParkingLot (Java singleton -> Swift)
 final class ParkingLot {
     static let shared = ParkingLot()
-
-    private(set) var id: Int = 1
-    private(set) var name: String = "My Parking Lot"
-    private(set) var address: Address = .init(zipCode: 0, address: "", city: "", state: "", country: "")
-    let parkingRate = ParkingRate()
-
-    private(set) var entrances: [String: Entrance] = [:]
-    private(set) var exits: [String: Exit] = [:]
-    private(set) var floors: [String: ParkingFloor] = [:]
-    private(set) var tickets: [String: ParkingTicket] = [:]
-    private(set) var displayBoards: [DisplayBoard] = []
-
-    private var lastTicketNo: Int = 1000
-    private var baseRatePerHour: Double = 50 // configurable policy
-
     private init() {}
 
-    // Admin-facing composition helpers
-    @discardableResult
-    func addEntrance(_ e: Entrance) -> Bool {
-        entrances["\(e.id)"] = e
-        return true
+    // Config / policy
+    var name: String = "My Parking Lot"
+    var address: Address = .init(line1: "", city: "", state: "", zip: "", country: "")
+    private(set) var baseRatePerHour: Double = 50
+    let rate = ParkingRate()
+
+    // Composition
+    private(set) var entrances: [Int: Entrance] = [:]
+    private(set) var exits: [Int: Exit] = [:]
+    private(set) var floors: [String: ParkingFloor] = [:]
+    private(set) var tickets: [Int: ParkingTicket] = [:]
+
+    private var nextTicket: Int = 1000
+
+    // Admin helpers
+    func addEntrance(_ e: Entrance) { entrances[e.id] = e }
+    func addExit(_ x: Exit) { exits[x.id] = x }
+
+    func addSpot(floor: String, spot: ParkingSpot) {
+        let f = floors[floor] ?? ParkingFloor(name: floor)
+        f.addSpot(spot)
+        floors[floor] = f
     }
 
-    @discardableResult
-    func addExit(_ e: Exit) -> Bool {
-        exits["\(e.id)"] = e
-        return true
+    func addDisplayBoard(floor: String, board: DisplayBoard) {
+        let f = floors[floor] ?? ParkingFloor(name: floor)
+        f.addDisplayBoard(board)
+        floors[floor] = f
     }
 
-    @discardableResult
-    func addParkingSpot(floorName: String, spot: ParkingSpot) -> Bool {
-        let floor = floors[floorName] ?? ParkingFloor(name: floorName)
-        floor.addParkingSlot(spot)
-        floors[floorName] = floor
-        return true
+    // -------- Core workflows (faithful to Java) --------
+
+    // Issue a ticket only if a spot can be allocated (return nil if full/unavailable)
+    fileprivate func issueTicketIfPossible(vehicle: Vehicle, from entrance: Entrance) -> ParkingTicket? {
+        // naive matching rule based on vehicle type; customize if your Java has rules
+        let matcher: (ParkingSpot) -> Bool = {
+            switch vehicle {
+            case is Motorcycle: return $0 is MotorcycleSpot || $0 is Compact || $0 is Large || $0 is Handicapped
+            case is Car, is Van: return $0 is Compact || $0 is Large || $0 is Handicapped
+            case is Truck: return $0 is Large
+            default: return $0 is Compact || $0 is Large
+            }
+        }
+
+        guard let (floor, spot) = findFirstFreeSpot(where: matcher) else {
+            return nil // lot (for this vehicle type) is full
+        }
+
+        _ = spot.assignVehicle(vehicle)
+        nextTicket += 1
+        let t = ParkingTicket(ticketNo: nextTicket, vehicle: vehicle, entrance: entrance, entryTime: Date())
+        vehicle.assignTicket(t)
+        tickets[t.ticketNo] = t
+        t.status = .inUse
+
+        // Display boards are typically refreshed by caller; expose helper:
+        refreshBoards(of: floor)
+        return t
     }
 
-    @discardableResult
-    func addDisplayBoard(floorName: String, board: DisplayBoard) -> Bool {
-        let floor = floors[floorName] ?? ParkingFloor(name: floorName)
-        floor.addDisplayBoard(board)
-        floors[floorName] = floor
-        displayBoards.append(board)
-        return true
-    }
-
-    // Core workflows
-    func getParkingTicket(for vehicle: Vehicle) -> ParkingTicket {
-        // pick any entrance if not specified
-        let entrance = entrances.values.first ?? Entrance(id: 1)
-        if entrances.isEmpty { entrances["1"] = entrance }
-        return issueTicket(vehicle: vehicle, entrance: entrance)
-    }
-
-    fileprivate func issueTicket(vehicle: Vehicle, entrance: Entrance) -> ParkingTicket {
-        lastTicketNo += 1
-        let ticket = ParkingTicket(ticketNo: lastTicketNo, vehicle: vehicle, entrance: entrance)
-        vehicle.assignTicket(ticket)
-        tickets["\(ticket.ticketNo)"] = ticket
-        ticket.status = .inUse
-        return ticket
-    }
-
-    func pay(ticket: ParkingTicket, method: String) -> Bool {
-        let hours = max(Date().timeIntervalSince(ticket.entryTime) / 3600.0, 0.25)
-        let amount = parkingRate.calculate(hours: hours, baseRate: baseRatePerHour)
+    // Payment flow
+    func pay(_ ticket: ParkingTicket, via method: String) -> Bool {
+        let hours = max(Date().timeIntervalSince(ticket.entryTime) / 3600.0, 0.25) // 15 min min
+        let amount = rate.calculateAmount(hours: hours, baseRatePerHour: baseRatePerHour)
         ticket.amount = amount
 
-        let payment = PaymentFactory.make(method: method, amount: amount)
+        let payment = PaymentFactory.make(method, amount: amount)
         guard payment.initiateTransaction() else { return false }
 
         ticket.payment = payment
         ticket.status = .paid
+        ticket.exitTime = Date()
         return true
     }
 
+    // Query
     func isFull() -> Bool {
-        // simple check: if every floor has all spots occupied
         guard !floors.isEmpty else { return false }
-        return floors.values.allSatisfy { floor in
-            floor.spots.allSatisfy { $0.vehicle != nil }
+        return floors.values.allSatisfy { floor in floor.allSpots.allSatisfy { !$0.isFree } }
+    }
+
+    // Utilities used by DisplayBoard demo
+    func getAllSpots() -> [ParkingSpot] { floors.values.flatMap { $0.allSpots } }
+    func refreshBoards() { floors.values.forEach { f in f.displayBoards.forEach { $0.update(f.allSpots) } } }
+
+    // refresh boards for a particular floor
+    private func refreshBoards(of floor: ParkingFloor) { floor.displayBoards.forEach { $0.update(floor.allSpots) } }
+
+    private func findFirstFreeSpot(where predicate: (ParkingSpot) -> Bool) -> (ParkingFloor, ParkingSpot)? {
+        for floor in floors.values {
+            if let s = floor.allSpots.first(where: { $0.isFree && predicate($0) }) {
+                return (floor, s)
+            }
         }
+        return nil
     }
 }
 
-// MARK: - Example usage (optional)
+// MARK: - Playground demo (commented)
+// This mirrors Java's scenarios: getTicket -> update board -> pay -> validate -> update board
 /*
-let admin = Admin(userName: "admin", passwordHash: "hash", status: .active,
-                  person: .init(name: "Owner", streetAddress: "1", city: "X", state: "Y", zipcode: 0, country: "IN"))
+let lot = ParkingLot.shared
+let entrance = Entrance(id: 1)
+let exit = Exit(id: 1)
+lot.addEntrance(entrance)
+lot.addExit(exit)
 
-admin.addEntrance(Entrance(id: 1))
-admin.addExit(Exit(id: 1))
-admin.addParkingSpot(floorName: "G", spot: CompactSpot(id: 101))
-admin.addDisplayBoard(floorName: "G", displayBoard: DisplayBoard(id: 1))
+lot.addSpot(floor: "G", spot: Compact(id: 101))
+lot.addSpot(floor: "G", spot: Compact(id: 102))
+lot.addSpot(floor: "G", spot: Large(id: 201))
+lot.addSpot(floor: "G", spot: MotorcycleSpot(id: 301))
+let board = DisplayBoard(id: 1)
+lot.addDisplayBoard(floor: "G", board: board)
+lot.refreshBoards()
+board.showFreeSlot()
 
-let bike = Motorcycle(licenseNo: "MH-01-AB-1234")
-let ticket = ParkingLot.shared.getParkingTicket(for: bike)
-// ... later:
-_ = ParkingLot.shared.pay(ticket: ticket, method: "card")
-let ok = ParkingLot.shared.exits["1"]?.validateTicket(ticket) ?? false
-print("Exit allowed:", ok)
+print("\n→→→ Scenario: Customer enters")
+let car = Car(licenseNo: "KA-01-HH-1234")
+let t1 = entrance.getTicket(car)
+lot.refreshBoards()
+board.showFreeSlot()
+
+print("\n→→→ Scenario: Customer pays & exits")
+if let ticket = t1 {
+    _ = lot.pay(ticket, via: "card")
+    exit.validateTicket(ticket)
+    lot.refreshBoards()
+    board.showFreeSlot()
+}
 */
